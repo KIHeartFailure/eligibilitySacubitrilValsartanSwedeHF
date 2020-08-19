@@ -1,0 +1,353 @@
+```{r}
+
+tabElFunc <- function(pop, exportname, export = FALSE) {
+
+  ## Literal
+
+  pdata_tmp <- pdata %>%
+    filter(!!enexpr(pop)) %>%
+    mutate(eligi = rowSums(select(., matches("^ie_in|^ie_ex")) == FALSE) > 0)
+  impdata_tmp <- impdata %>%
+    filter(!!enexpr(pop)) %>%
+    mutate(eligi_imp = rowSums(select(., matches("^ie_in|^ie_ex")) == FALSE) > 0)
+
+  tabeldata.lit <- left_join(pdata_tmp,
+    impdata_tmp %>% select(lopnr, eligi_imp),
+    by = "lopnr"
+  )
+
+  tab.imp.lit <- CreateTableOne(
+    vars = tabvars,
+    strata = "eligi_imp",
+    data = tabeldata.lit
+  )
+
+  tab.imp.lit <- print(tab.imp.lit,
+    varLabels = TRUE, missing = FALSE, printToggle = FALSE,
+    nonnormal = tabvars, test = TRUE,
+    catDigits = 1, contDigits = 1,
+    explain = FALSE
+  )
+
+  tab.comp.lit <- CreateTableOne(
+    vars = tabvars,
+    strata = "eligi",
+    data = tabeldata.lit %>% filter(nomissing)
+  )
+
+  tab.comp.lit <- print(tab.comp.lit,
+    varLabels = TRUE, missing = FALSE, printToggle = FALSE,
+    nonnormal = tabvars, test = TRUE,
+    catDigits = 1, contDigits = 1,
+    explain = FALSE
+  )
+
+  tab.missasel.lit <- CreateTableOne(
+    vars = tabvars,
+    strata = "eligi",
+    data = tabeldata.lit
+  )
+
+  tab.missasel.lit <- print(tab.missasel.lit,
+    varLabels = TRUE, missing = FALSE, printToggle = FALSE,
+    nonnormal = tabvars, test = TRUE,
+    catDigits = 1, contDigits = 1,
+    explain = FALSE
+  )
+
+  ## Pragmatic
+
+  pdata_tmp <- pdata %>%
+    filter(!!enexpr(pop)) %>%
+    mutate(eligi = rowSums(select(., matches("^ie_in_pragscen|^ie_in_labscen|^ie_ex_pragscen|^ie_ex_labscen")) == FALSE) > 0)
+  impdata_tmp <- impdata %>%
+    filter(!!enexpr(pop)) %>%
+    mutate(eligi_imp = rowSums(select(., matches("^ie_in_pragscen|^ie_in_labscen|^ie_ex_pragscen|^ie_ex_labscen")) == FALSE) > 0)
+
+  tabeldata.prag <- left_join(pdata_tmp,
+    impdata_tmp %>% select(lopnr, eligi_imp),
+    by = "lopnr"
+  )
+
+  tab.imp.prag <- CreateTableOne(
+    vars = tabvars,
+    strata = "eligi_imp",
+    data = tabeldata.prag
+  )
+
+  tab.imp.prag <- print(tab.imp.prag,
+    varLabels = TRUE, missing = FALSE, printToggle = FALSE,
+    nonnormal = tabvars, test = TRUE,
+    catDigits = 1, contDigits = 1,
+    explain = FALSE
+  )
+
+  tab.comp.prag <- CreateTableOne(
+    vars = tabvars,
+    strata = "eligi",
+    data = tabeldata.prag %>% filter(nomissing)
+  )
+
+  tab.comp.prag <- print(tab.comp.prag,
+    varLabels = TRUE, missing = FALSE, printToggle = FALSE,
+    nonnormal = tabvars, test = TRUE,
+    catDigits = 1, contDigits = 1,
+    explain = FALSE
+  )
+
+  tab.missasel.prag <- CreateTableOne(
+    vars = tabvars,
+    strata = "eligi",
+    data = tabeldata.prag
+  )
+
+  tab.missasel.prag <- print(tab.missasel.prag,
+    varLabels = TRUE, missing = FALSE, printToggle = FALSE,
+    nonnormal = tabvars, test = TRUE,
+    catDigits = 1, contDigits = 1,
+    explain = FALSE
+  )
+
+  all <- cbind(
+    tab.imp.lit[, 1:3], tab.comp.lit[, 1:3], tab.missasel.lit[, 1:3],
+    tab.imp.prag[, 1:3], tab.comp.prag[, 1:3], tab.missasel.prag[, 1:3]
+  )
+
+  ## incidence rate
+
+  funcOutEl <- function(event, time, elvar, data) {
+    out <- data.frame(matrix(NA, ncol = 3, nrow = 1))
+
+    ev <- by(data[event], data[, elvar], sum)
+    s <- by(data[, time], data[, elvar], sum) / 365.25
+    r <- pois.exact(x = ev, pt = s / 100)
+
+    out[1, 1:2] <- paste0(
+      dF(s, dig = 0), ", ",
+      dF(r$rate, dig = 1), " (",
+      dF(r$lower, dig = 1), "-",
+      dF(r$upper, dig = 1), ")"
+    )
+    p <- poisson.test(c(x = ev["TRUE"], x = ev["FALSE"]), T = c(s["TRUE"], s["FALSE"]) / 1000)
+    out[1, 3] <- round(p$p.value, 3)
+    if (out[1, 3] == "0") out[1, 3] <- "<0.001"
+
+    return(out)
+  }
+
+  out.imp.lit <- funcOutEl("deathnum", "timeTodeath", "eligi_imp", tabeldata.lit)
+  out.imp.lit <- rbind(out.imp.lit, funcOutEl("cvdeathnum", "timeTodeath", "eligi_imp", tabeldata.lit))
+  out.imp.lit <- rbind(out.imp.lit, funcOutEl("out_hf_hospnum", "time_out_hf_hosp", "eligi_imp", tabeldata.lit))
+  out.imp.lit <- rbind(out.imp.lit, funcOutEl("out_cvdeath_hfhospnum", "time_out_hf_hosp", "eligi_imp", tabeldata.lit))
+  out.imp.lit <- rbind(out.imp.lit, funcOutEl("noncvdeathnum", "timeTodeath", "eligi_imp", tabeldata.lit))
+
+  out.comp.lit <- funcOutEl("deathnum", "timeTodeath", "eligi", tabeldata.lit %>% filter(nomissing))
+  out.comp.lit <- rbind(out.comp.lit, funcOutEl(
+    "cvdeathnum", "timeTodeath", "eligi",
+    tabeldata.lit %>% filter(nomissing)
+  ))
+  out.comp.lit <- rbind(out.comp.lit, funcOutEl(
+    "out_hf_hospnum", "time_out_hf_hosp", "eligi",
+    tabeldata.lit %>% filter(nomissing)
+  ))
+  out.comp.lit <- rbind(out.comp.lit, funcOutEl(
+    "out_cvdeath_hfhospnum", "time_out_hf_hosp", "eligi",
+    tabeldata.lit %>% filter(nomissing)
+  ))
+  out.comp.lit <- rbind(out.comp.lit, funcOutEl(
+    "noncvdeathnum", "timeTodeath", "eligi",
+    tabeldata.lit %>% filter(nomissing)
+  ))
+
+  out.miss.lit <- funcOutEl("deathnum", "timeTodeath", "eligi", tabeldata.lit)
+  out.miss.lit <- rbind(out.miss.lit, funcOutEl("cvdeathnum", "timeTodeath", "eligi", tabeldata.lit))
+  out.miss.lit <- rbind(out.miss.lit, funcOutEl("out_hf_hospnum", "time_out_hf_hosp", "eligi", tabeldata.lit))
+  out.miss.lit <- rbind(out.miss.lit, funcOutEl("out_cvdeath_hfhospnum", "time_out_hf_hosp", "eligi", tabeldata.lit))
+  out.miss.lit <- rbind(out.miss.lit, funcOutEl("noncvdeathnum", "timeTodeath", "eligi", tabeldata.lit))
+
+  out.imp.prag <- funcOutEl("deathnum", "timeTodeath", "eligi_imp", tabeldata.prag)
+  out.imp.prag <- rbind(out.imp.prag, funcOutEl("cvdeathnum", "timeTodeath", "eligi_imp", tabeldata.prag))
+  out.imp.prag <- rbind(out.imp.prag, funcOutEl("out_hf_hospnum", "time_out_hf_hosp", "eligi_imp", tabeldata.prag))
+  out.imp.prag <- rbind(out.imp.prag, funcOutEl("out_cvdeath_hfhospnum", "time_out_hf_hosp", "eligi_imp", tabeldata.prag))
+  out.imp.prag <- rbind(out.imp.prag, funcOutEl("noncvdeathnum", "timeTodeath", "eligi_imp", tabeldata.prag))
+
+  out.comp.prag <- funcOutEl("deathnum", "timeTodeath", "eligi", tabeldata.prag %>% filter(nomissing))
+  out.comp.prag <- rbind(out.comp.prag, funcOutEl("cvdeathnum", "timeTodeath", "eligi", tabeldata.prag %>% filter(nomissing)))
+  out.comp.prag <- rbind(out.comp.prag, funcOutEl(
+    "out_hf_hospnum", "time_out_hf_hosp", "eligi",
+    tabeldata.prag %>% filter(nomissing)
+  ))
+  out.comp.prag <- rbind(out.comp.prag, funcOutEl(
+    "out_cvdeath_hfhospnum", "time_out_hf_hosp", "eligi",
+    tabeldata.prag %>% filter(nomissing)
+  ))
+  out.comp.prag <- rbind(out.comp.prag, funcOutEl(
+    "noncvdeathnum", "timeTodeath", "eligi",
+    tabeldata.prag %>% filter(nomissing)
+  ))
+
+  out.miss.prag <- funcOutEl("deathnum", "timeTodeath", "eligi", tabeldata.prag)
+  out.miss.prag <- rbind(out.miss.prag, funcOutEl("cvdeathnum", "timeTodeath", "eligi", tabeldata.prag))
+  out.miss.prag <- rbind(out.miss.prag, funcOutEl("out_hf_hospnum", "time_out_hf_hosp", "eligi", tabeldata.prag))
+  out.miss.prag <- rbind(out.miss.prag, funcOutEl("out_cvdeath_hfhospnum", "time_out_hf_hosp", "eligi", tabeldata.prag))
+  out.miss.prag <- rbind(out.miss.prag, funcOutEl("noncvdeathnum", "timeTodeath", "eligi", tabeldata.prag))
+  
+  outall <- cbind(out.imp.lit, out.comp.lit, out.miss.lit, out.imp.prag, out.comp.prag, out.miss.prag)
+
+  colnames(outall) <- c(rep(c("Eligible", "Not eligible", "p-value"), 6))
+
+  colnames(all) <- c(
+    rep(c("Eligible", "Not eligible", "p-value"), 6)
+  )
+
+  rownamesadj <- c(
+    rownames(all), "IR All-cause mortality",
+    "IR CV mortality",
+    "IR first HF hospitalisation",
+    "IR CV mort + first HF hosp",
+    "IR Non-CV mortality"
+  )
+
+  all <- rbind(all, outall)
+
+  all_tmp <- all
+  rownames(all_tmp) <- rownamesadj
+
+  ## Export to Excel
+  if (export) write.xlsx(all_tmp, paste0("./output/tabs/tabByEligibilty_", exportname, "_swedehf_", Sys.Date(), ".xlsx"), rowNames = TRUE)
+
+  ## white space removed in kable function. Add HTML space.
+  rownamesadj <- sub("^ ", "&nbsp;", rownamesadj)
+
+  ## add footer to indicated which variabels are used as eligibilty variables
+  rownamesadj <- ifelse(stri_extract_first_words(rownamesadj) %in% c(
+    elvars_mp,
+    "raas"
+  ),
+  paste0(rownamesadj, footnote_marker_symbol(1)), rownamesadj
+  )
+  ## add footer to indicated which variabels are used as eligibilty variables
+  rownamesadj <- ifelse(stri_extract_first_words(rownamesadj) %in% c(
+    elvars_r,
+    "raas"
+  ),
+  paste0(rownamesadj, footnote_marker_symbol(2)), rownamesadj
+  )
+
+  rownames(all) <- rownamesadj
+
+
+  myHeader <- c(
+    " " = 1, "Imputed data" = 3, "Complete case" = 3, "Missing as eligible" = 3,
+    "Imputed data" = 3, "Complete case" = 3, "Missing as eligible" = 3
+  )
+  names(myHeader) <- c(
+    " ", "Imputed data", "Complete case", "Missing as eligible",
+    "Imputed data", "Complete case", "Missing as eligible"
+  )
+
+  myHeader2 <- c(" " = 1, "Literal scenario" = 9, "Pragmatic scenario" = 9)
+  names(myHeader2) <- c(" ", "Literal scenario", "Pragmatic scenario")
+
+  footnote(mykable(all, row.names = TRUE) %>%
+    add_header_above(myHeader) %>%
+    add_header_above(myHeader2),
+  symbol = c(
+    "Used in eligibility criteria for mrEF + pEF. Note that other variables that are subsets or in other ways related to the variables used in the eligibilty criteria should be viewed with caution",
+    "Used in eligibility criteria for rEF. Note that other variables that are subsets or in other ways related to the variables used in the eligibilty criteria should be viewed with caution"
+  ),
+  general = c("Categorical variables are presented with n (%) and tested with chi2-test and continous variables are presented with median [q1-q3] and tested with Mann-Whitney U test. IR is Incidence rate (sum py, rate/100py (95% CI))")
+  )
+}
+```
+
+
+### Population: `r popnames[1]`
+```{r Elpop1}
+tabElFunc(pop1)
+```
+
+#### Subgroup: Females
+```{r Elpop1f}
+tabElFunc(pop1 & gender == "female")
+```
+
+#### Subgroup: Males
+```{r Elpop1m}
+tabElFunc(pop1 & gender == "male")
+```
+
+### Population: `r popnames[2]`
+```{r Elpop2}
+tabElFunc(pop2, exportname = popnames[2], export = TRUE)
+```
+
+#### Subgroup: Females
+```{r Elpop2f}
+tabElFunc(pop2 & gender == "female")
+```
+
+#### Subgroup: Males
+```{r Elpop2m}
+tabElFunc(pop2 & gender == "male")
+```
+
+### Population: `r popnames[3]`
+```{r Elpop3}
+tabElFunc(pop3, exportname = popnames[3], export = TRUE)
+```
+
+#### Subgroup: Females
+```{r Elpop3f}
+tabElFunc(pop3 & gender == "female")
+```
+
+#### Subgroup: Males
+```{r Elpop3m}
+tabElFunc(pop3 & gender == "male")
+```
+
+### Population: `r popnames[4]`
+```{r Elpop4}
+tabElFunc(pop4, exportname = popnames[4], export = TRUE)
+```
+
+#### Subgroup: Females
+```{r Elpop4f}
+tabElFunc(pop4 & gender == "female")
+```
+
+#### Subgroup: Males
+```{r Elpop4m}
+tabElFunc(pop4 & gender == "male")
+```
+
+### Population: `r popnames[5]`
+```{r Elpop5}
+tabElFunc(pop5, exportname = popnames[5], export = TRUE)
+```
+
+#### Subgroup: Females
+```{r Elpop5f}
+tabElFunc(pop5 & gender == "female")
+```
+
+#### Subgroup: Males
+```{r Elpop5m}
+tabElFunc(pop5 & gender == "male")
+```
+
+### Population: `r popnames[6]`
+```{r Elpop6}
+tabElFunc(pop6, exportname = popnames[6], export = TRUE)
+```
+
+#### Subgroup: Females
+```{r Elpop6f}
+tabElFunc(pop6 & gender == "female")
+```
+
+#### Subgroup: Males
+```{r Elpop6m}
+tabElFunc(pop6 & gender == "male")
+```

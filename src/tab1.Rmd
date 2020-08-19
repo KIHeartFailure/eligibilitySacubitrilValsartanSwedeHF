@@ -1,0 +1,238 @@
+```{r}
+
+tab1Func <- function(pop, exportname, export = FALSE) {
+  tab1data <- pdata %>%
+    filter(!!enexpr(pop))
+
+  tab1.strat <- CreateTableOne(
+    vars = tabvars,
+    strata = "nomissing",
+    data = tab1data
+  )
+  strat <- print(tab1.strat,
+    varLabels = TRUE, missing = TRUE, printToggle = FALSE, nonnormal = tabvars, test = FALSE,
+    catDigits = 1, contDigits = 1,
+    explain = FALSE
+  )
+
+  tab1.overall <- CreateTableOne(
+    vars = tabvars,
+    data = tab1data
+  )
+
+  overall <- print(tab1.overall,
+    varLabels = TRUE, missing = FALSE, printToggle = FALSE, nonnormal = tabvars,
+    catDigits = 1, contDigits = 1,
+    explain = FALSE
+  )
+
+  all <- cbind(overall[, 1], strat)
+
+  ## incidence rate
+
+  funcOut <- function(event, time) {
+    out <- data.frame(matrix(NA, ncol = 4, nrow = 1))
+    ev <- sum(tab1data[event])
+    s <- sum(tab1data[, time]) / 365.25
+    r <- pois.exact(x = ev, pt = s / 100)
+
+    ev2 <- by(tab1data[event], tab1data[, "nomissing"], sum)
+    s2 <- by(tab1data[, time], tab1data[, "nomissing"], sum) / 365.25
+    r2 <- pois.exact(x = ev2, pt = s2 / 100)
+
+    out[1, 1] <- paste0(
+      dF(s, dig = 0), ", ",
+      dF(r$rate, dig = 1), " (",
+      dF(r$lower, dig = 1), "-",
+      dF(r$upper, dig = 1), ")"
+    )
+    out[1, 2:3] <- paste0(
+      dF(s2, dig = 0), ", ",
+      dF(r2$rate, dig = 1), " (",
+      dF(r2$lower, dig = 1), "-",
+      dF(r2$upper, dig = 1), ")"
+    )
+
+    return(out)
+  }
+
+  outall <- funcOut("deathnum", "timeTodeath")
+  outall <- rbind(outall, funcOut("cvdeathnum", "timeTodeath"))
+  outall <- rbind(outall, funcOut("out_hf_hospnum", "time_out_hf_hosp"))
+  outall <- rbind(outall, funcOut("out_cvdeath_hfhospnum", "time_out_hf_hosp"))
+  outall <- rbind(outall, funcOut("noncvdeathnum", "timeTodeath"))
+
+  colnames(outall) <- c(
+    "Whole cohort", "Missing for any eligibilty variable",
+    "No missing for any eligibilty variable", "Missing (%)"
+  )
+  colnames(all) <- c(
+    "Whole cohort", "Missing for any eligibilty variable",
+    "No missing for any eligibilty variable", "Missing (%)"
+  )
+
+  rownamesadj <- c(
+    rownames(all), "IR All-cause mortality",
+    "IR CV mortality",
+    "IR first HF hospitalisation",
+    "IR CV mort + first HF hosp",
+    "IR Non-CV mortality"
+  )
+
+  all <- rbind(all, outall)
+
+  all_tmp <- all
+  rownames(all_tmp) <- rownamesadj
+
+  ## Export to Excel
+  if (export) write.xlsx(all_tmp, paste0("./output/tabs/tab1_", exportname, "_swedehf_", Sys.Date(), ".xlsx"), rowNames = TRUE)
+
+
+  ## white space removed in kable function. Add HTML space.
+  rownamesadj <- sub("^ ", "&nbsp;", rownamesadj)
+
+  ## add footer to indicated which variabels are used as eligibilty variables
+  rownamesadj <- ifelse(stri_extract_first_words(rownamesadj) %in% c(
+    elvars_r,
+    "raas"
+  ),
+  paste0(rownamesadj, footnote_marker_symbol(1)), rownamesadj
+  )
+  rownamesadj <- ifelse(stri_extract_first_words(rownamesadj) %in% c(
+    elvars_mp,
+    "raas"
+  ),
+  paste0(rownamesadj, footnote_marker_symbol(2)), rownamesadj
+  )
+
+  ## add footer to indicated which variabels are used in imputation
+  rownamesadj <- ifelse(stri_extract_first_words(rownamesadj) %in% c(
+    names(impvars),
+    "indexYear_cat",
+    "ntProBNP",
+    "raas"
+  ),
+  paste0(rownamesadj, footnote_marker_symbol(3)), rownamesadj
+  )
+
+  ## add footer to indicate that indexyear was included as a continous variable in imputation model
+  rownamesadj <- ifelse(stri_extract_first_words(rownamesadj) == "indexYear_cat",
+    paste0(rownamesadj, footnote_marker_symbol(4)), rownamesadj
+  )
+
+  ## add footer to indicate that ntProBNP is included as log in imputation model
+  rownamesadj <- ifelse(stri_extract_first_words(rownamesadj) == "ntProBNP",
+    paste0(rownamesadj, footnote_marker_symbol(5)), rownamesadj
+  )
+
+  ## add footer to indicate that raas included as acei and arb separatly in model
+  rownamesadj <- ifelse(stri_extract_first_words(rownamesadj) == "raas",
+    paste0(rownamesadj, footnote_marker_symbol(6)), rownamesadj
+  )
+
+
+  rownames(all) <- rownamesadj
+
+  footnote(mykable(all, row.names = TRUE),
+    symbol = c(
+      "Used in eligibility criteria for rEF",
+      "Used in eligibility criteria for mrEF + pEF",
+      "Included in imputation model",
+      "In imputation model index year is included as a continous variable",
+      "In imputation model log(ntProBNP) is included",
+      "In imputation model and eligibility calculation ACEi and arb are included separetly"
+    ),
+    general = c("Categorical variables are presented with n (%) and continous variables with median [q1-q3]. IR is Incidence rate (sum py, rate/100py (95% CI))")
+  )
+}
+```
+
+### Population: `r popnames[1]`
+```{r basepop1}
+tab1Func(pop1)
+```
+
+#### Subgroup: Females
+```{r basepop1f}
+tab1Func(pop1 & gender == "female")
+```
+
+#### Subgroup: Males
+```{r basepop1m}
+tab1Func(pop1 & gender == "male")
+```
+
+### Population: `r popnames[2]`
+```{r basepop2}
+tab1Func(pop2)
+```
+
+#### Subgroup: Females
+```{r basepop2f}
+tab1Func(pop2 & gender == "female")
+```
+
+#### Subgroup: Males
+```{r basepop2m}
+tab1Func(pop2 & gender == "male")
+```
+
+### Population: `r popnames[3]`
+```{r basepop3}
+tab1Func(pop3)
+```
+
+#### Subgroup: Females
+```{r basepop3f}
+tab1Func(pop3 & gender == "female")
+```
+
+#### Subgroup: Males
+```{r basepop3m}
+tab1Func(pop3 & gender == "male")
+```
+
+### Population: `r popnames[4]`
+```{r basepop4}
+tab1Func(pop4, exportname = popnames[4], export = TRUE)
+```
+
+#### Subgroup: Females
+```{r basepop4f}
+tab1Func(pop4 & gender == "female")
+```
+
+#### Subgroup: Males
+```{r basepop4m}
+tab1Func(pop4 & gender == "male")
+```
+
+### Population: `r popnames[5]`
+```{r basepop5}
+tab1Func(pop5, exportname = popnames[5], export = TRUE)
+```
+
+#### Subgroup: Females
+```{r basepop5f}
+tab1Func(pop5 & gender == "female")
+```
+
+#### Subgroup: Males
+```{r basepop5m}
+tab1Func(pop5 & gender == "male")
+```
+
+### Population: `r popnames[6]`
+```{r basepop6}
+tab1Func(pop6, exportname = popnames[6], export = TRUE)
+```
+
+#### Subgroup: Females
+```{r basepop6f}
+tab1Func(pop6 & gender == "female")
+```
+
+#### Subgroup: Males
+```{r basepop6m}
+tab1Func(pop6 & gender == "male")
+```

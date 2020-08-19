@@ -1,0 +1,68 @@
+
+```{r graph}
+funcIEgraph <- function(ievars, corcutoff) {
+  graphdata <- impdata %>%
+    filter(efgroup %in% c("mrEF", "pEF")) %>%
+    select(matches(ievars))
+  graphdatacor <- correlate(graphdata)
+  graphdatacor <- stretch(graphdatacor) %>%
+    filter(!is.na(r)) %>% # abs(r) > 0.05) %>%
+    # col <- graphdatacor %>%
+    mutate(absr = abs(r))
+
+  sizenodes <- graphdata %>%
+    summarise_all(list(~ 1 - sum(.) / n())) %>%
+    as.numeric()
+  nodes <- data.frame(cbind(id = colnames(graphdata), size = sizenodes))
+
+  g <- graph_from_data_frame(graphdatacor, directed = FALSE, vertices = nodes)
+
+  nodes <- nodes %>%
+    mutate(
+      degree = degree(g),
+      # Add a column containing the strength of each node
+      strength = strength(g),
+      size = as.numeric(size)
+    )
+
+
+  col <- E(g)$r < 0
+
+  ggraph(g, layout = "with_kk") +
+    # Add an edge link geometry mapping transparency to weight
+    geom_edge_link(aes(colour = col, width = absr, filter = absr > corcutoff)) +
+    # Add a node point geometry
+    geom_node_point(aes(size = nodes$size)) +
+    geom_node_text(aes(label = nodes$id), repel = TRUE) +
+    scale_edge_color_manual(values = c(rgb(135, 0, 82, maxColorValue = 255), rgb(212, 9, 99, maxColorValue = 255))) +
+    theme_minimal() +
+    theme(
+      legend.position = "none",
+      panel.grid.major = element_blank(),
+      panel.grid.minor = element_blank(),
+      axis.title = element_blank(),
+      axis.text = element_blank(),
+      axis.ticks = element_blank()
+    )
+}
+```
+
+#### Literal scenario
+
+```{r literal graph, dev='win.metafile', fig.show = 'hide'}
+funcIEgraph("^ie_in|^ie_ex", 0.1)
+```
+
+```{r literal graph for report}
+funcIEgraph("^ie_in|^ie_ex", 0.1)
+```
+
+#### Pragmatic scenario
+
+```{r pragmatic graph, dev='win.metafile', fig.show = 'hide'}
+funcIEgraph("^ie_in_pragscen|^ie_in_labscen|^ie_ex_pragscen|^ie_ex_labscen", 0.05)
+```
+
+```{r pragmatic graph for report}
+funcIEgraph("^ie_in_pragscen|^ie_in_labscen|^ie_ex_pragscen|^ie_ex_labscen", 0.05)
+```

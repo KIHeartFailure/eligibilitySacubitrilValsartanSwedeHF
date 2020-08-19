@@ -1,0 +1,184 @@
+---
+title: 'Statistical report: Eligibility PARAGON-HF in SwedeHF'
+author: 'Statistician: Lina Benson'
+  
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    theme: cosmo
+    highlight: textmate
+    number_sections: yes
+    toc: yes
+    toc_depth: 4
+    toc_float: yes
+    fig.height: 4
+    fig.width: 8
+link-citations: yes
+bibliography: references.bib
+nocite: '@*'
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = FALSE, include = TRUE, comment = "",
+  warning = FALSE, message = FALSE, fig.pos = "H",
+  fig.path = "../output/figs/"
+)
+options(knitr.kable.NA = "")
+```
+
+```{r adjust_directory_if_needed, include=FALSE}
+# Uncomment lines below if rmd file is placed in a subdirectory
+knitr::opts_knit$set(root.dir = normalizePath("../"))
+```
+
+```{r load_project, include=FALSE}
+# 1. Set options in config/global.dcf
+# 2. Load packages listed in config/global.dcf
+# 3. Import functions and code in lib directory
+# 4. Load cache 
+
+ProjectTemplate::reload.project()
+```             
+
+# Data handling
+
+## Data source
+
+Dataset prepared by Bodil Svennblad with corrections version 11 (rs.data11) with end follow-up 2016-12-31. For additional comorbidities, see section [Comorbidities from Socialstyrelsen](#comorbs), the raw data files from Socialstyrelsen were used (dagk_sel_7403_2017.sas7bdat, ov_sel_7403_2017.sas7bdat, sv_sel_7403_2017.sas7bdat). 
+
+## Primary inclusion
+
+Included in the analysis: 
+
+```{r flow}
+mykable(flow)
+```
+
+First patient in: `r min(pdata$date)` and last patient in: `r max(pdata$date)`. 
+
+## Created variables 
+
+Variables prepared in rs.data3 are documented elsewhere. This section specifies additional recoding and derivation of variables for the purpose of current analysis that are not considered to be self explanatory. 
+
+For details on variables see document PARAGON_PARADIGM_SwedeHF.docx (prepared by Gianluigi Savarese).
+
+### Comorbidities from Socialstyrelsen {#comorbs}
+
+If date of visit/hospitalization/discharge is missing it is imputed with the January 1 of the year of visit/hospitalization/discharge (dates missing for Sahlgrenska dagkirurgi in 1999 and Arvika, Torsby öppenvård in 2009). 
+
+```{r cm}
+mykable(cm.out)
+```
+
+### Other
+
+```{r other}
+other.out <- rbind(
+  c("**scb.dispinc**", "**scb.income_cat**"),
+  c("<33% percentile within the respective indexyear", "Low"),
+  c("33-<66% percentile within the respective indexyear", "Medium"),
+  c(">=66% percentile within the respective indexyear", "High"),
+  c("", "**prevHFhosp9mo**"),
+  c("daysLasthfHosp <= 30.5 * 9", "yes"),
+  c("daysLasthfHosp > 30.5 * 9 OR missing", "no"),
+  c("", "**MDRD**"),
+  c("nephro::MDRD4(creatinine / 88.4, sex, age, ethnicity) where all are considered non-Black", "")
+)
+colnames(other.out) <- c("Old variable (in rs.data3)", "New variable (used in current analysis)")
+mykable(other.out)
+```
+[@nephro]
+
+# Statistical analysis
+
+## Imputation 
+
+Imputation is performed for variables needed for the eligibility criteria using mice [@mice]. Since one specific value is needed for the criteria only one single imputation is performed using the variables specified in section [Baseline characteristics](#baschar). The analysis performed on the imputed dataset is considered the main analysis. 
+
+Patients with missing dose (if they have acei and arb) or are imputed with having acei and arb are considered to have dose equivalent to enalapril 10 mg/day. This is used only for inclusion criteria 4 for rEF (PARADIGM). 
+
+<!--```{r}
+if (any(impdata$nomissing == FALSE)) print(paste0("Note to self: All eligibility variables are not imputed "))
+``` --> 
+
+## Populations PARAGON/PARADIGM and EF
+
+1. Whole population where the PARAGON criteria are applied to pEF/mrREF and PARADIGM to rEF (rEF+mrEF+pEF)
+2. Population $\le$ 50% where the PARAGON criteria are applied to mrREF and PARADIGM to rEF (rEF+mrEF)
+3. Population pEF/mrEF where the PARAGON criteria are applied (mrEF+pEF)
+4. Population rEF where the PARADIGM criteria are applied (rEF)
+5. Population mrEF where the PARAGON criteria are applied (mrEF)
+6. Population pEF where the PARAGON criteria are applied (pEF) 
+
+## Subgroup analysis
+
+In addition all analyses are also performed seperatly for females and males.  
+
+## Scenarios
+
+The analysis is performed for three scenarios, the literal scenario (all available criteria), the pragmatic scenario and the label scenario (variations of). 
+
+## Consistency analysis
+
+### Complete case
+
+An analysis is also performed on a complete case dataset, where only patients with non-missing information for all eligibility variables are included. Note that there are different eligibility variables in rEF and mrEF+pEF, so for example a patient with rEF does not require BMI to be included in the complete case analysis. 
+
+### Missing assumed to be eligible
+
+An analysis is also performed were patients with missing values for eligibility variables were assumed to be eligible for inclusion for the criteria using the variables with missing values ("Missing as eligible"). 
+
+# Results
+
+## Baseline characteristics {#baschar}
+
+Baseline characteristics are presented by patients in the completes case dataset (non missing observations for all eligibility variables) and patients with missing observations for any of the eligibility variables. Imputed values are not shown in the table. 
+
+```{r tab1, child = "../src/tab1.Rmd"}
+
+```
+
+## Inclusion/exclusion criteria
+
+The number prior to the respective criteria are indicating the numbers in Table 1 in [@paragon]. 
+
+The number and percentage indicates the remaining cohort after applying the respective criteria. The criteria are therefore not ordered and mutually exclusive.
+
+```{r incexl, child = "../src/incexl.Rmd"}
+
+```
+
+### Graph
+
+The graph is performed on the imputed data for the mrEF+pEF population. 
+
+The size of the dots are dependent on how many patients were not eligible due to the respective inclusion/exclusion criteria. The width of the line connecting the dots shows the pairwise correlation between two criteria (wider is more correlated) where plum shows positive correlations and cyclamen shows negative correlations. Only pairwise correlations > 0.1 (literal scenario)/0.05 (pragmatic scenario) are shown in the graph.  
+
+```{r incexlgraph, child = "../src/incexlgraph.Rmd"}
+
+```
+
+## Baseline characteristics by eligibilty
+
+Baseline characteristics are presented by patients eligible and not eligible according to the four different calculations. Imputed values are not shown in the table. Note that many variables are used in the eligibilty criteria, or are subsets or in other ways related to the variables used in the eligibilty criteria, and these should be viewed with caution. 
+
+```{r tabel, child = "../src/tabByEligibilty.Rmd"}
+
+```
+
+# Reproducibility
+
+## R session information
+
+`r sessionInfo()$R.version$version.string` [@r] is used, for more details see below.
+
+```{r sessinfo}
+sessionInfo()
+```
+
+## R code
+
+The R code for all data handling and statistical analyses are found: https://github.com/KIHeartFailure/eligibilitySacubitrilValsartanSwedeHF. On publication the repository is made public in order to link to it from the resulting article for increased transparency and code sharing. No data or output is stored in the repository. 
+
+# References

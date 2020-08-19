@@ -1,0 +1,448 @@
+```{r}
+
+incexlFunc <- function(pop, nr = NULL, export = FALSE) {
+  if (exists("flowtab")) rm(flowtab, envir = .GlobalEnv)
+  if (exists("impdata_tmp")) rm(impdata_tmp, envir = .GlobalEnv)
+  if (exists("pdata_tmp")) rm(pdata_tmp, envir = .GlobalEnv)
+
+  impdata_tmp <- impdata %>%
+    filter(!!enexpr(pop))
+  pdata_tmp <- pdata %>%
+    filter(!!enexpr(pop))
+
+  Nimp <- nrow(impdata_tmp)
+  Ncomp <- nrow(pdata_tmp %>% filter(nomissing))
+  Nel <- nrow(pdata_tmp)
+
+  flowtab <- data.frame("No of patients", Nimp, Ncomp, Nel)
+  colnames(flowtab) <- c("", rep("out", 3))
+
+  flowtab <- rbind(flowtab, funcIEfake("**Inclusion criteria**"))
+
+  flowtab <- rbind(flowtab, funcIEfake("1. Written informed consent must be obtained before any assessment is performed"))
+
+  flowtab <- rbind(flowtab, funcIETab(
+    ievar = "ie_in_pragscen_in2",
+    paste0("2. >=50/18 years of age", footnote_marker_symbol(1)),
+    impdata_tmp, pdata_tmp
+  ))
+
+  flowtab <- rbind(flowtab, funcIEfake("3. LVEF"))
+
+  flowtab <- rbind(flowtab, funcIETab(
+    "ie_in4",
+    "4. Diuretic treatment at discharge/ACEi or ARB equivalent to enalapril 10 mg/day and BBl at discharge",
+    impdata_tmp, pdata_tmp
+  ))
+
+  flowtab <- rbind(flowtab, funcIETab(
+    "ie_in_pragscen_in5",
+    paste0("5. NYHA II-IV", footnote_marker_symbol(1)),
+    impdata_tmp, pdata_tmp
+  ))
+
+  flowtab <- rbind(flowtab, funcIEfake("6. Structural heart disease"))
+
+  flowtab <- rbind(flowtab, funcIETab(
+    "ie_in_pragscen_in7",
+    paste0(
+      "7. NT-proBNP/(AF)/HF hospitalization within previous 9/12 months of index", footnote_marker_symbol(1)
+    ),
+    impdata_tmp, pdata_tmp
+  ))
+
+  flowtab <- rbind(flowtab, funcSumIEAll(
+    "Eligible (literal scenario) only inclusion criteria",
+    "^ie_in",
+    impdata_tmp, pdata_tmp
+  ))
+
+  flowtab <- rbind(flowtab, funcSumIEAll(
+    "Eligible (pragmatic scenario) only inclusion criteria",
+    "^ie_in_pragscen",
+    impdata_tmp, pdata_tmp
+  ))
+
+  flowtab <- rbind(flowtab, funcIEfake("**Exclusion criteria**"))
+
+  flowtab <- rbind(flowtab, funcIETab(
+    "ie_ex1",
+    paste0("1. Any prior echocardiographic measurement of LVEF <40%"),
+    impdata_tmp, pdata_tmp
+  ))
+
+  flowtab <- rbind(flowtab, funcIETab(
+    "ie_ex2",
+    "2. Acute coronary syndrome",
+    impdata_tmp, pdata_tmp
+  ))
+
+  flowtab <- rbind(flowtab, funcIEfake("3. Any clinical event within the 6 months prior to visit 1 that could have reduced the LVEF 
+           (e.g., MI, CABG), unless an echocardiographic measurement was performed after the event 
+           confirming the LVEF to be >=45%"))
+
+  flowtab <- rbind(flowtab, funcIEfake("4. Current acute decompensated HF (in primary inclusion criteria = only outpatients)"))
+
+  flowtab <- rbind(flowtab, funcIETab(
+    "ie_ex5",
+    "5. Patients with both ACEI and ARB at discharge",
+    impdata_tmp, pdata_tmp
+  ))
+
+  flowtab <- rbind(flowtab, funcIEfake("6. History of hypersensitivity to any of the study drugs or to drugs of similar chemical classes"))
+
+  flowtab <- rbind(flowtab, funcIETab(
+    "ie_ex_pragscen_ex7",
+    paste0("7. Known history of angioedema", footnote_marker_symbol(1)),
+    impdata_tmp, pdata_tmp
+  ))
+
+  flowtab <- rbind(flowtab, funcIETab(
+    "ie_ex8a",
+    paste0("8. a. PAH", footnote_marker_symbol(2)),
+    impdata_tmp, pdata_tmp
+  ))
+
+  flowtab <- rbind(
+    flowtab, funcIETab(
+      "ie_ex8b", "8. b. Hemoglobin <10 g/dL",
+      impdata_tmp, pdata_tmp
+    )
+  )
+
+  flowtab <- rbind(
+    flowtab, funcIETab(
+      "ie_ex8c", "8. c. BMI >40 kg/m2",
+      impdata_tmp, pdata_tmp
+    )
+  )
+
+  flowtab <- rbind(flowtab, funcIETab(
+    "ie_ex9a",
+    "9. a. SBP >= 180 mmHg",
+    impdata_tmp, pdata_tmp
+  ))
+
+  flowtab <- rbind(flowtab, funcIETab(
+    "ie_no_ex9b",
+    paste0("9. b. SBP >150 mmHg and <180 mmHg at baseline, 
+         unless the patient is receiving 3 or more antihypertensive drugs 
+         (assuming NOone has calcium channel blockers)", footnote_marker_symbol(3)),
+    impdata_tmp, pdata_tmp
+  ))
+
+  flowtab <- rbind(flowtab, funcIETab(
+    "ie_ex9b",
+    "9. b. SBP >150 mmHg and <180 mmHg at baseline, 
+         unless the patient is receiving 3 or more antihypertensive drugs 
+         (assuming EVERYone has calcium channel blockers)",
+    impdata_tmp, pdata_tmp
+  ))
+
+  flowtab <- rbind(flowtab, funcIETab(
+    "ie_ex_pragscen_ex9c",
+    paste0("9. c. SBP <110/100 mmHg", footnote_marker_symbol(1)),
+    impdata_tmp, pdata_tmp
+  ))
+
+  flowtab <- rbind(flowtab, funcIEfake("9. d. SBP <100 mm Hg or symptomatic hypotension as determined by the investigator at visit 103 or visit 199/201"))
+
+  flowtab <- rbind(flowtab, funcIEfake("10. Use of other investigational drugs at the time of enrollment, 
+           or within 30 days or 5 half-lives of enrollment, whichever is longer"))
+
+  flowtab <- rbind(flowtab, funcIETab(
+    "ie_ex11",
+    "11. Dilated cardiomyopathy",
+    impdata_tmp, pdata_tmp
+  ))
+
+  flowtab <- rbind(flowtab, funcIEfake("12. Evidence of right-sided HF in the absence of left-sided structural heart disease"))
+
+  flowtab <- rbind(flowtab, funcIETab(
+    "ie_ex_pragscen_ex13",
+    paste0("13. Pericardial constriction ect", footnote_marker_symbol(1)),
+    impdata_tmp, pdata_tmp
+  ))
+
+  flowtab <- rbind(flowtab, funcIETab(
+    "ie_ex14",
+    "14. Clinically significant congenital heart disease that could be the 
+              cause of the patient’s symptoms and signs of HF",
+    impdata_tmp, pdata_tmp
+  ))
+
+  flowtab <- rbind(flowtab, funcIEfake("15. Valvular disease"))
+
+
+  flowtab <- rbind(flowtab, funcIETab(
+    "ie_ex16",
+    "16. Stroke or TIA within 3 months prior to index",
+    impdata_tmp, pdata_tmp
+  ))
+
+  flowtab <- rbind(flowtab, funcIEfake("17. Coronary or carotid artery disease or valvular heart disease 
+           likely to require surgical or percutaneous intervention during the trial"))
+
+  flowtab <- rbind(flowtab, funcIETab(
+    "ie_ex18",
+    "18. AF and HR >110",
+    impdata_tmp, pdata_tmp
+  ))
+
+  flowtab <- rbind(flowtab, funcIETab(
+    "ie_ex19",
+    "19. CRT",
+    impdata_tmp, pdata_tmp
+  ))
+
+  flowtab <- rbind(flowtab, funcIETab(
+    "ie_ex20",
+    "20. Transplant",
+    impdata_tmp, pdata_tmp
+  ))
+
+  flowtab <- rbind(flowtab, funcIETab(
+    "ie_ex21",
+    "21. Literal - Any surgical or medical condition that in the opinion of the investigator 
+              may place the patient at higher risk from his/her participation in the study 
+              or is likely to prevent the patient from complying with the requirements of 
+              the study or completing the study",
+    impdata_tmp, pdata_tmp
+  ))
+
+  flowtab <- rbind(flowtab, funcIETab(
+    "ie_ex_pragscen_ex21",
+    paste0("21. Pragmatic - Any surgical or medical condition that in the opinion of the investigator 
+              may place the patient at higher risk from his/her participation in the study 
+              or is likely to prevent the patient from complying with the requirements of 
+              the study or completing the study", footnote_marker_symbol(2)),
+    impdata_tmp, pdata_tmp
+  ))
+
+  flowtab <- rbind(flowtab, funcIETab(
+    "ie_ex22",
+    "22. Pancreatic",
+    impdata_tmp, pdata_tmp
+  ))
+
+  flowtab <- rbind(flowtab, funcIETab(
+    "ie_ex23",
+    "23. History of liver disease",
+    impdata_tmp, pdata_tmp
+  ))
+
+  flowtab <- rbind(flowtab, funcIETab(
+    "ie_ex_pragscen_ex24a",
+    paste0("24. a. eGFR (MDRD) < 30", footnote_marker_symbol(1)),
+    impdata_tmp, pdata_tmp
+  ))
+
+  flowtab <- rbind(flowtab, funcIEfake("24. b. eGFR <25 ml/min/1.73 m2 at visit 103 or visit 199/201"))
+  flowtab <- rbind(flowtab, funcIEfake("24. c. eGFR reduction >35% (compared with visit 1) at visit 103 or visit 199/201"))
+  flowtab <- rbind(flowtab, funcIEfake("25. Presence of known functionally significant bilateral renal artery stenosis"))
+
+  flowtab <- rbind(flowtab, funcIETab(
+    "ie_ex26a",
+    "26. a. Potassium > 5.2",
+    impdata_tmp, pdata_tmp
+  ))
+
+  flowtab <- rbind(flowtab, funcIEfake("26. b. Serum potassium >5.4 mmol/l (mEq/l) at visit 103 or visit 199/201 "))
+
+  flowtab <- rbind(flowtab, funcIEfake("27. Life expentance < 3/5 years"))
+
+  flowtab <- rbind(flowtab, funcIEfake("28. History of noncompliance to medical regimens and patients who are considered potentially unreliable (see 21.)"))
+
+  flowtab <- rbind(flowtab, funcIETab(
+    "ie_ex29",
+    "29. History or evidence of drug or alcohol abuse within the past 12 months",
+    impdata_tmp, pdata_tmp
+  ))
+
+  flowtab <- rbind(flowtab, funcIEfake("30. Persons directly involved in the execution of this protocol"))
+
+  flowtab <- rbind(flowtab, funcIETab(
+    "ie_ex31",
+    "31. Malignancy (other than localized basal or squamous cell carcinoma of the 
+         skin or localized prostate cancer) within the past 5 years prior to index",
+    impdata_tmp, pdata_tmp
+  ))
+
+  flowtab <- rbind(flowtab, funcIEfake("32. Pregnant or nursing (lactating) women, where pregnancy is defined as the state of a 
+           female after conception and until the termination of gestation, confirmmed by a positive 
+           human chorionic gonadotropin laboratory test"))
+  flowtab <- rbind(flowtab, funcIEfake("33. Women of child-bearing potential, defined as all women physiologically capable of 
+           becoming pregnant, unless they are using highly effective methods of contraception during 
+           dosing and for 7 days off study drug"))
+
+  colnames(flowtab) <- c(
+    "Criteria",
+    "Imputed data",
+    "Complete case",
+    "Missing as eligible"
+  )
+
+  flowtab <- rbind(flowtab, funcSumIEAll(
+    "Eligible (literal scenario) only exclusion criteria",
+    "^ie_ex",
+    impdata_tmp, pdata_tmp
+  ))
+  flowtab <- rbind(flowtab, funcSumIEAll(
+    "Eligible (pragmatic scenario) only exclusion criteria",
+    "^ie_ex_pragscen",
+    impdata_tmp, pdata_tmp
+  ))
+  flowtab <- rbind(flowtab, funcSumIEAll(
+    "Eligible (literal scenario)",
+    "^ie_in|^ie_ex",
+    impdata_tmp, pdata_tmp
+  ))
+  flowtab <- rbind(flowtab, funcSumIEAll(
+    "Eligible (pragmatic scenario)",
+    "^ie_in_pragscen|^ie_ex_pragscen",
+    impdata_tmp, pdata_tmp
+  ))
+  flowtab <- rbind(flowtab, funcSumIEAll(
+    "Eligible (label scenario with NYHA (incl 5) and eGFR (excl 24a))",
+    "ie_in_pragscen_in5|ie_ex_pragscen_ex24a",
+    impdata_tmp, pdata_tmp
+  ))
+  flowtab <- rbind(flowtab, funcSumIEAll(
+    "Eligible (label scenario with NYHA (incl 5) and NP (incl 7))",
+    "ie_in_pragscen_in5|ie_in_pragscen_in7",
+    impdata_tmp, pdata_tmp
+  ))
+  flowtab <- rbind(flowtab, funcSumIEAll(
+    "Eligible (label scenario with NYHA (incl 5) and diuretics (incl 4))",
+    "ie_in_pragscen_in5|ie_in4",
+    impdata_tmp, pdata_tmp
+  ))
+  flowtab <- rbind(flowtab, funcSumIEAll(
+    "Eligible (label scenario with NYHA (incl 5), NP (incl7) and diuretics (incl 4))",
+    "ie_in_pragscen_in5|ie_in_pragscen_in7|ie_in4",
+    impdata_tmp, pdata_tmp
+  ))
+  flowtab <- rbind(flowtab, funcSumIEAll(
+    "Eligible (label scenario with NYHA (incl 5), eGFR (excl 24a) and NP (incl7))",
+    "ie_in_pragscen_in5|ie_ex_pragscen_ex24a|ie_in_pragscen_in7",
+    impdata_tmp, pdata_tmp
+  ))
+  flowtab <- rbind(flowtab, funcSumIEAll(
+    "Eligible (label scenario with NYHA (incl 5), eGFR (excl 24a) and diuretics (incl 4))",
+    "ie_in_pragscen_in5|ie_ex_pragscen_ex24a|ie_in4",
+    impdata_tmp, pdata_tmp
+  ))
+  flowtab <- rbind(flowtab, funcSumIEAll(
+    "Eligible (label scenario with NYHA (incl 5), eGFR (excl 24a), diuretics (incl 4) and NP (incl7))",
+    "ie_in_pragscen_in5|ie_ex_pragscen_ex24a|ie_in4|ie_in_pragscen_in7",
+    impdata_tmp, pdata_tmp
+  ))
+
+  ## Export to Excel
+  if (export) {
+    write.xlsx(flowtab, paste0("./output/tabs/tabincexc_", popnamesout[nr], "_swedehf_", Sys.Date(), ".xlsx"),
+      rowNames = FALSE
+    )
+  }
+
+  footnote(mykable(flowtab), # %>%
+    # pack_rows("Inclusion criteria", 2, 8) %>%
+    # pack_rows("Exclusion criteria", 9, nrow(flowtab) - 2),
+    symbol = c(
+      "Included in pragmatic scenario",
+      "Included in pragmatic scenario for mrEF and pEF",
+      "Analysed for consistency, not used in final eligibility calculation"
+    )
+  )
+}
+```
+
+### Population: `r popnames[1]`
+```{r ietab1}
+incexlFunc(pop1)
+```
+
+#### Subgroup: Females
+```{r ietab1f}
+incexlFunc(pop1 & gender == "female")
+```
+
+#### Subgroup: Males
+```{r ietab1m}
+incexlFunc(pop1 & gender == "male")
+```
+
+### Population: `r popnames[2]`
+```{r ietab2}
+incexlFunc(pop2)
+```
+
+#### Subgroup: Females
+```{r ietab2f}
+incexlFunc(pop2 & gender == "female")
+```
+
+#### Subgroup: Males
+```{r ietab2m}
+incexlFunc(pop2 & gender == "male")
+```
+
+### Population: `r popnames[3]`
+```{r ietab3}
+incexlFunc(pop3)
+```
+
+#### Subgroup: Females
+```{r ietab3f}
+incexlFunc(pop3 & gender == "female")
+```
+
+#### Subgroup: Males
+```{r ietab3m}
+incexlFunc(pop3 & gender == "male")
+```
+
+### Population: `r popnames[4]`
+```{r ietab4}
+incexlFunc(pop4)
+```
+
+#### Subgroup: Females
+```{r ietab4f}
+incexlFunc(pop4 & gender == "female")
+```
+
+#### Subgroup: Males
+```{r ietab4m}
+incexlFunc(pop4 & gender == "male")
+```
+
+### Population: `r popnames[5]`
+```{r ietab5}
+incexlFunc(pop5)
+```
+
+#### Subgroup: Females
+```{r ietab5f}
+incexlFunc(pop5 & gender == "female")
+```
+
+#### Subgroup: Males
+```{r ietab5m}
+incexlFunc(pop5 & gender == "male")
+```
+
+### Population: `r popnames[6]`
+```{r ietab6}
+incexlFunc(pop6)
+```
+
+#### Subgroup: Females
+```{r ietab6f}
+incexlFunc(pop6 & gender == "female")
+```
+
+#### Subgroup: Males
+```{r ietab6m}
+incexlFunc(pop6 & gender == "male")
+```
